@@ -2,6 +2,7 @@
 #include <tf/transform_broadcaster.h>
 #include <leap_motion/leapros.h>
 #include <std_msgs/Header.h>
+#include <tf/transform_listener.h>
 #include "Puma_OP.h"
 
 #define TOPIC_SIZE 1000
@@ -9,8 +10,6 @@
 //TODO: Add subscriber/callback to get hand position(s) from /leapmotion/data topic
 // Can do broadcast *in* callback or main loop.
 void leapmotion_callback(const leap_motion::leapros &msg) {
-	static tf::TransformBroadcaster br;
-
 	std_msgs::Header header = msg.header;	// uint32 seq, time stamp, string frame_id 
 	tf::Vector3 palmpos(msg.palmpos.x, msg.palmpos.y, msg.palmpos.z);
 	tf::Vector3 direction(msg.direction.x, msg.direction.y, msg.direction.z);  // Direction vector points 'forward' out of the hand (orientation of fingers)
@@ -22,8 +21,8 @@ void leapmotion_callback(const leap_motion::leapros &msg) {
 	A = normal; // Z
 	O = direction; // Y
 	N = O.cross(A); // X = YxZ
-	static tf::Matrix3x3 hand_orientation_m(N.x, N.y, N.x, O.x, O.y, O.z, A.x, A.y, A.z);
-	static tf::Transform t3(hand_orientation_m, palmpos);
+	tf::Matrix3x3 hand_orientation_m(N.x, N.y, N.z, O.x, O.y, O.z, A.x, A.y, A.z);
+	tf::Transform t3(hand_orientation_m.inverse(), palmpos);
 	//ROS_INFO("Palm x:%lf y:%lf z:%lf", msg.palmpos.x, msg.palmpos.y, msg.palmpos.z);
 	//br.sendTransform(tf::StampedTransform(t3, header.stamp, "leap_motion", "hand");
 	br.sendTransform(tf::StampedTransform(t3, ros::Time::now(), "leap_motion", "hand"));
@@ -53,10 +52,6 @@ int main(int argc, char **argv) {
 	br.sendTransform(tf::StampedTransform(t1, ros::Time::now(), "origin", "robot_base")); // Position of robot base  w.r.t origin
 	br.sendTransform(tf::StampedTransform(t2, ros::Time::now(), "origin", "leap_motion")); // Position of Leapmotion base w.r.t origin
 	ros::Subscriber sub=nh.subscribe("leapmotion/data", TOPIC_SIZE, &leapmotion_callback);
-	ros::Rate rate(16); // 16 Hz
-	while(ros::ok()) { 
-		ros::spinOnce();
-		rate.sleep();
-	}
+
 	return 0;
 }
